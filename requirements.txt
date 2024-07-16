@@ -1,0 +1,6 @@
+psutil
+pandas
+requests
+Pillow
+transformers
+sqlalchemy
