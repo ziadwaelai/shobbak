@@ -17,7 +17,7 @@ import string
 
 def get_mac_address():
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-
+addres = get_mac_address()
 # # Function to get MAC address
 # def get_mac_address():
 #     for interface, addrs in psutil.net_if_addrs().items():
@@ -44,7 +44,7 @@ session = Session()
 
 # Function to get or create user entry
 def get_or_create_user():
-    mac_address = get_mac_address()
+    mac_address = addres
     if mac_address is None:
         st.error("Could not retrieve MAC address. Please check your network settings.")
         return None
