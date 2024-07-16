@@ -5,3 +5,4 @@ Pillow
 transformers
 sqlalchemy
 uuid
+streamlit_cookies_manager
