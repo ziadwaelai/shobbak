@@ -30,7 +30,7 @@ class Score(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
     score = Column(Integer, nullable=False)
-    mac_address = Column(String, nullable=False)
+    mac_address = Column(String, nullable=False, unique=True)
 
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
@@ -43,7 +43,6 @@ def get_or_create_user():
     if score_entry:
         return score_entry
     else:
-        st.warning("User not found. Please enter your name to create a new entry.")
         name = st.text_input("Enter your name:")
         if st.button("Submit Name"):
             if name:
