@@ -1,3 +1,5 @@
+import uuid
+import psutil
 import streamlit as st
 import pandas as pd
 import requests
@@ -10,17 +12,12 @@ from collections import defaultdict
 from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import uuid
-from streamlit_cookies_manager import EncryptedCookieManager
 
-# Initialize cookies
-cookies = EncryptedCookieManager(
-    prefix="your_prefix",  # Change this to your own unique prefix
-    password="your_password"  # Use a secure password
-)
-
-if not cookies.ready():
-    st.stop()
+# Function to get MAC address
+def get_mac_address():
+    mac = uuid.getnode()
+    mac_address = ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2))
+    return mac_address
 
 # Database setup
 DATABASE_URL = "sqlite:///leaderboard.db"
@@ -31,8 +28,8 @@ class Score(Base):
     __tablename__ = 'scores'
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    unique_id = Column(String, nullable=False, unique=True)
     score = Column(Integer, nullable=False)
+    mac_address = Column(String, nullable=False)
 
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
@@ -40,24 +37,23 @@ session = Session()
 
 # Function to get or create user entry
 def get_or_create_user():
-    unique_id = cookies.get("unique_id")
-    if unique_id:
-        score_entry = session.query(Score).filter_by(unique_id=unique_id).first()
-        if score_entry:
-            return score_entry
-
-    new_unique_id = str(uuid.uuid4())
-    cookies["unique_id"] = new_unique_id
-    cookies.save()
-    name = st.text_input("Enter your name:")
-    if st.button("Submit Name"):
-        if name:
-            new_user = Score(name=name, unique_id=new_unique_id, score=0)
-            session.add(new_user)
-            session.commit()
-            return new_user
-        else:
-            st.error("Name cannot be empty")
+    mac_address = get_mac_address()
+    if mac_address is None:
+        st.error("Could not retrieve MAC address. Please check your network settings.")
+        return None
+    score_entry = session.query(Score).filter_by(mac_address=mac_address).first()
+    if score_entry:
+        return score_entry
+    else:
+        name = st.text_input("Enter your name:")
+        if st.button("Submit Name"):
+            if name:
+                new_user = Score(name=name, score=0, mac_address=mac_address)
+                session.add(new_user)
+                session.commit()
+                return new_user
+            else:
+                st.error("Name cannot be empty")
     return None
 
 # Function to update or create a score entry
@@ -69,119 +65,6 @@ def update_score(user, delta):
 def get_scores():
     scores = session.query(Score).all()
     return pd.DataFrame([(s.name, s.score) for s in scores], columns=["Name", "Score"])
-
-# Function to convert drive link
-@st.cache_data
-def convert_drive_link(link):
-    match = re.search(r"/d/([^/]+)", link)
-    if match:
-        file_id = match.group(1)
-        return f"https://drive.google.com/uc?export=download&id={file_id}"
-    return link
-
-# Function to download image
-@st.cache_data
-def download_image(url):
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.content
-    return None
-
-# Function to resize image
-@st.cache_data
-def resize_image(image_content, size=(1024, 1024)):
-    try:
-        image = Image.open(BytesIO(image_content))
-        image = image.resize(size)
-        if image.mode == "RGBA":
-            image = image.convert("RGB")
-        img_byte_arr = BytesIO()
-        image.save(img_byte_arr, format="JPEG")
-        return img_byte_arr.getvalue()
-    except UnidentifiedImageError:
-        return None
-
-# Function to remove background
-@st.cache_data
-def remove_background(image_content):
-    try:
-        image = Image.open(BytesIO(image_content))
-        pipe = pipeline("image-segmentation", model="briaai/RMBG-1.4", trust_remote_code=True)
-        output_img = pipe(image)
-        img_byte_arr = BytesIO()
-        output_img.save(img_byte_arr, format="PNG")
-        return img_byte_arr.getvalue()
-    except UnidentifiedImageError:
-        return None
-
-# Function to combine with background
-@st.cache_data
-def combine_with_background(foreground_content, background_content, resize_foreground=False):
-    try:
-        foreground = Image.open(BytesIO(foreground_content)).convert("RGBA")
-        background = Image.open(BytesIO(background_content)).convert("RGBA")
-        background = background.resize((1024, 1024))
-
-        if resize_foreground:
-            fg_area = foreground.width * foreground.height
-            bg_area = background.width * background.height
-            scale_factor = (0.8 * bg_area / fg_area) ** 0.5
-
-            new_width = int(foreground.width * scale_factor)
-            new_height = int(foreground.height * scale_factor)
-
-            foreground = foreground.resize((new_width, new_height))
-            dimensions = (new_width, new_height)
-        else:
-            dimensions = (foreground.width, foreground.height)
-
-        fg_width, fg_height = foreground.size
-        bg_width, bg_height = background.size
-        position = ((bg_width - fg_width) // 2, (bg_height - fg_height) // 2)
-
-        combined = background.copy()
-        combined.paste(foreground, position, foreground)
-        img_byte_arr = BytesIO()
-        combined.save(img_byte_arr, format="PNG")
-        return img_byte_arr.getvalue(), dimensions
-    except UnidentifiedImageError:
-        return None, None
-
-# Function to download all images as zip
-def download_all_images_as_zip(images_info, remove_bg=False, add_bg=False, bg_image=None, resize_foreground=False):
-    zip_buffer = BytesIO()
-    with ZipFile(zip_buffer, "w") as zf:
-        for name, url_or_file in images_info:
-            try:
-                if isinstance(url_or_file, str):
-                    url = convert_drive_link(url_or_file)
-                    image_content = download_image(url)
-                else:
-                    image_content = url_or_file.read()
-
-                if image_content:
-                    if remove_bg:
-                        processed_image = remove_background(image_content)
-                        ext = "png"
-                    else:
-                        size = (1290, 789) if "banner" in name.lower() else (1024, 1024)
-                        processed_image = resize_image(image_content, size=size)
-                        ext = "png"
-
-                    if add_bg and bg_image:
-                        processed_image, dimensions = combine_with_background(processed_image, bg_image, resize_foreground=resize_foreground)
-                        ext = "png"
-
-                    if processed_image:
-                        zf.writestr(f"{name.rsplit('.', 1)[0]}.{ext}", processed_image)
-                
-                # Increase score if processed successfully
-                update_score(user, 1)
-            except Exception as e:
-                # Decrease score if there's an error
-                update_score(user, -1)
-    zip_buffer.seek(0)
-    return zip_buffer
 
 # Streamlit app layout
 st.set_page_config(layout="wide")
@@ -204,6 +87,112 @@ with col1:
     user = get_or_create_user()
 
     if user:
+        # Existing functions and logic for processing images
+        def convert_drive_link(link):
+            match = re.search(r"/d/([^/]+)", link)
+            if match:
+                file_id = match.group(1)
+                return f"https://drive.google.com/uc?export=download&id={file_id}"
+            return link
+
+        def download_image(url):
+            response = requests.get(url)
+            if response.status_code == 200:
+                return response.content
+            return None
+
+        def resize_image(image_content, size=(1024, 1024)):
+            try:
+                image = Image.open(BytesIO(image_content))
+                image = image.resize(size)
+                if image.mode == "RGBA":
+                    image = image.convert("RGB")
+                img_byte_arr = BytesIO()
+                image.save(img_byte_arr, format="JPEG")
+                return img_byte_arr.getvalue()
+            except UnidentifiedImageError:
+                update_score(user, -1)
+                return None
+
+        def remove_background(image_content):
+            try:
+                image = Image.open(BytesIO(image_content))
+                pipe = pipeline("image-segmentation", model="briaai/RMBG-1.4", trust_remote_code=True)
+                output_img = pipe(image)
+                img_byte_arr = BytesIO()
+                output_img.save(img_byte_arr, format="PNG")
+                return img_byte_arr.getvalue()
+            except UnidentifiedImageError:
+                update_score(user, -1)
+                return None
+
+        def combine_with_background(foreground_content, background_content, resize_foreground=False):
+            try:
+                foreground = Image.open(BytesIO(foreground_content)).convert("RGBA")
+                background = Image.open(BytesIO(background_content)).convert("RGBA")
+                background = background.resize((1024, 1024))
+
+                if resize_foreground:
+                    fg_area = foreground.width * foreground.height
+                    bg_area = background.width * background.height
+                    scale_factor = (0.8 * bg_area / fg_area) ** 0.5
+
+                    new_width = int(foreground.width * scale_factor)
+                    new_height = int(foreground.height * scale_factor)
+
+                    foreground = foreground.resize((new_width, new_height))
+                    dimensions = (new_width, new_height)
+                else:
+                    dimensions = (foreground.width, foreground.height)
+
+                fg_width, fg_height = foreground.size
+                bg_width, bg_height = background.size
+                position = ((bg_width - fg_width) // 2, (bg_height - fg_height) // 2)
+
+                combined = background.copy()
+                combined.paste(foreground, position, foreground)
+                img_byte_arr = BytesIO()
+                combined.save(img_byte_arr, format="PNG")
+                return img_byte_arr.getvalue(), dimensions
+            except UnidentifiedImageError:
+                update_score(user, -1)
+                return None, None
+
+        def download_all_images_as_zip(images_info, remove_bg=False, add_bg=False, bg_image=None, resize_foreground=False):
+            zip_buffer = BytesIO()
+            with ZipFile(zip_buffer, "w") as zf:
+                for name, url_or_file in images_info:
+                    try:
+                        if isinstance(url_or_file, str):
+                            url = convert_drive_link(url_or_file)
+                            image_content = download_image(url)
+                        else:
+                            image_content = url_or_file.read()
+
+                        if image_content:
+                            if remove_bg:
+                                processed_image = remove_background(image_content)
+                                ext = "png"
+                            else:
+                                size = (1290, 789) if "banner" in name.lower() else (1024, 1024)
+                                processed_image = resize_image(image_content, size=size)
+                                ext = "png"
+
+                            if add_bg and bg_image:
+                                processed_image, dimensions = combine_with_background(processed_image, bg_image, resize_foreground=resize_foreground)
+                                ext = "png"
+
+                            if processed_image:
+                                zf.writestr(f"{name.rsplit('.', 1)[0]}.{ext}", processed_image)
+                        
+                        # Increase score if processed successfully
+                        update_score(user, 1)
+                    except Exception as e:
+                        # Decrease score if there's an error
+                        update_score(user, -1)
+            zip_buffer.seek(0)
+            return zip_buffer
+
         col1, col2 = st.columns([2, 1])
 
         with col1:
