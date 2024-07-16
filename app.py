@@ -88,7 +88,7 @@ def get_scores():
     return pd.DataFrame([(s.name, s.score) for s in scores], columns=["Name", "Score"])
 
 # Streamlit app layout
-st.set_page_config(layout="wide")
+# st.set_page_config(layout="wide")
 
 st.title("🖼️ PhotoMaster")
 
