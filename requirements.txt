@@ -1,3 +1,6 @@
+uuid
+requests
+streamlit_cookies_manager
 psutil
 pandas
 requests

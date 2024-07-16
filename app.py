@@ -12,12 +12,33 @@ from collections import defaultdict
 from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from streamlit_cookies_manager import EncryptedCookieManager
 
+# Initialize cookies
+cookies = EncryptedCookieManager(
+    prefix="your_prefix",  # Change this to your own unique prefix
+    password="your_password"  # Use a secure password
+)
+
+if not cookies.ready():
+    st.stop()
+
+# Function to get or create user entry with UUID
+def get_or_create_user():
+    unique_id = cookies.get("unique_id")
+    if not unique_id:
+        unique_id = str(uuid.uuid4())
+        cookies["unique_id"] = unique_id
+        cookies.save()
+    return unique_id
+
+# Get or create user
+unique_id = get_or_create_user()
 # Function to get MAC address
-def get_mac_address():
-    mac = uuid.getnode()
-    mac_address = ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2))
-    return mac_address
+# def get_mac_address():
+#     mac = uuid.getnode()
+#     mac_address = ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2))
+#     return mac_address
 
 # Database setup
 DATABASE_URL = "sqlite:///leaderboard.db"
@@ -37,7 +58,7 @@ session = Session()
 
 # Function to get or create user entry
 def get_or_create_user():
-    mac_address = get_mac_address()
+    mac_address = unique_id
     if mac_address is None:
         st.error("Could not retrieve MAC address. Please check your network settings.")
         return None
