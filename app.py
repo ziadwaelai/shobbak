@@ -1,5 +1,4 @@
 import uuid
-import psutil
 import streamlit as st
 import pandas as pd
 import requests
@@ -13,7 +12,8 @@ from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from streamlit_cookies_manager import EncryptedCookieManager
-
+# Streamlit app layout
+st.set_page_config(layout="wide")
 # Initialize cookies
 cookies = EncryptedCookieManager(
     prefix="your_prefix",  # Change this to your own unique prefix
@@ -34,11 +34,6 @@ def get_or_create_user():
 
 # Get or create user
 unique_id = get_or_create_user()
-# Function to get MAC address
-# def get_mac_address():
-#     mac = uuid.getnode()
-#     mac_address = ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2))
-#     return mac_address
 
 # Database setup
 DATABASE_URL = "sqlite:///leaderboard.db"
@@ -57,10 +52,10 @@ Session = sessionmaker(bind=engine)
 session = Session()
 
 # Function to get or create user entry
-def get_or_create_user():
+def get_or_create_user_entry():
     mac_address = unique_id
     if mac_address is None:
-        st.error("Could not retrieve MAC address. Please check your network settings.")
+        st.error("Could not retrieve UUID. Please check your network settings.")
         return None
     score_entry = session.query(Score).filter_by(mac_address=mac_address).first()
     if score_entry:
@@ -87,13 +82,13 @@ def get_scores():
     scores = session.query(Score).all()
     return pd.DataFrame([(s.name, s.score) for s in scores], columns=["Name", "Score"])
 
-# Streamlit app layout
-# st.set_page_config(layout="wide")
 
-st.title("🖼️ PhotoMaster")
+
+# Center the title
+st.markdown("<h1 style='text-align: center;'>🖼️ PhotoMaster</h1>", unsafe_allow_html=True)
 
 # Layout with columns
-col1, col2 = st.columns([3, 1])
+col1, col2 = st.columns([2, 1])
 
 with col2:
     # Display leaderboard
@@ -103,9 +98,10 @@ with col2:
     df.index = df.index + 1  # Start index from 1
     df.index.name = 'Rank'
     st.dataframe(df, height=500)
+
 with col1:
     # Get or create user
-    user = get_or_create_user()
+    user = get_or_create_user_entry()
 
     if user:
         # Existing functions and logic for processing images
@@ -214,6 +210,8 @@ with col1:
             zip_buffer.seek(0)
             return zip_buffer
 
+        st.markdown("<h3 style='text-align: center;'>Upload and Process Images</h3>", unsafe_allow_html=True)
+        
         col1, col2 = st.columns([2, 1])
 
         with col1:
