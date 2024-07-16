@@ -4,4 +4,3 @@ requests
 Pillow
 transformers
 sqlalchemy
-streamlit_cookies_manager
