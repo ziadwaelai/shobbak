@@ -12,13 +12,19 @@ from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# Function to get MAC address
+import random
+import string
+
 def get_mac_address():
-    for interface, addrs in psutil.net_if_addrs().items():
-        for addr in addrs:
-            if addr.family == psutil.AF_LINK:
-                return addr.address
-    return None
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
+
+# # Function to get MAC address
+# def get_mac_address():
+#     for interface, addrs in psutil.net_if_addrs().items():
+#         for addr in addrs:
+#             if addr.family == psutil.AF_LINK:
+#                 return addr.address
+#     return None
 
 # Database setup
 DATABASE_URL = "sqlite:///leaderboard.db"
