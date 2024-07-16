@@ -11,16 +11,14 @@ from collections import defaultdict
 from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from streamlit_cookies_manager import EncryptedCookieManager
 
-# Initialize cookies
-cookies = EncryptedCookieManager(
-    prefix="your_prefix",  # Change this to your own unique prefix
-    password="your_password"  # Use a secure password
-)
-
-if not cookies.ready():
-    st.stop()
+# Function to get MAC address
+def get_mac_address():
+    for interface, addrs in psutil.net_if_addrs().items():
+        for addr in addrs:
+            if addr.family == psutil.AF_LINK:
+                return addr.address
+    return None
 
 # Database setup
 DATABASE_URL = "sqlite:///leaderboard.db"
@@ -31,8 +29,8 @@ class Score(Base):
     __tablename__ = 'scores'
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    email = Column(String, nullable=False, unique=True)
     score = Column(Integer, nullable=False)
+    mac_address = Column(String, nullable=False)
 
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)
@@ -40,31 +38,23 @@ session = Session()
 
 # Function to get or create user entry
 def get_or_create_user():
-    user_email = cookies.get("user_email")
-    if user_email:
-        score_entry = session.query(Score).filter_by(email=user_email).first()
-        if score_entry:
-            return score_entry
-
-    email = st.text_input("Enter your email:")
-    if email:
-        score_entry = session.query(Score).filter_by(email=email).first()
-        if score_entry:
-            cookies.set("user_email", email)
-            cookies.save()
-            return score_entry
-        else:
-            name = st.text_input("Enter your name:")
-            if st.button("Submit Name"):
-                if name:
-                    new_user = Score(name=name, email=email, score=0)
-                    session.add(new_user)
-                    session.commit()
-                    cookies.set("user_email", email)
-                    cookies.save()
-                    return new_user
-                else:
-                    st.error("Name cannot be empty")
+    mac_address = get_mac_address()
+    if mac_address is None:
+        st.error("Could not retrieve MAC address. Please check your network settings.")
+        return None
+    score_entry = session.query(Score).filter_by(mac_address=mac_address).first()
+    if score_entry:
+        return score_entry
+    else:
+        name = st.text_input("Enter your name:")
+        if st.button("Submit Name"):
+            if name:
+                new_user = Score(name=name, score=0, mac_address=mac_address)
+                session.add(new_user)
+                session.commit()
+                return new_user
+            else:
+                st.error("Name cannot be empty")
     return None
 
 # Function to update or create a score entry
