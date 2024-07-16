@@ -1,3 +1,4 @@
+import uuid
 import psutil
 import streamlit as st
 import pandas as pd
@@ -12,19 +13,11 @@ from sqlalchemy import create_engine, Column, Integer, String, Float
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-import random
-import string
-
+# Function to get MAC address
 def get_mac_address():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=12))
-addres = get_mac_address()
-# # Function to get MAC address
-# def get_mac_address():
-#     for interface, addrs in psutil.net_if_addrs().items():
-#         for addr in addrs:
-#             if addr.family == psutil.AF_LINK:
-#                 return addr.address
-#     return None
+    mac = uuid.getnode()
+    mac_address = ':'.join(('%012X' % mac)[i:i+2] for i in range(0, 12, 2))
+    return mac_address
 
 # Database setup
 DATABASE_URL = "sqlite:///leaderboard.db"
@@ -44,7 +37,7 @@ session = Session()
 
 # Function to get or create user entry
 def get_or_create_user():
-    mac_address = addres
+    mac_address = get_mac_address()
     if mac_address is None:
         st.error("Could not retrieve MAC address. Please check your network settings.")
         return None

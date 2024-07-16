@@ -4,3 +4,4 @@ requests
 Pillow
 transformers
 sqlalchemy
+uuid
