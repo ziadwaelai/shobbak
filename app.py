@@ -92,12 +92,12 @@ col1, col2 = st.columns([2, 1])
 
 with col2:
     # Display leaderboard
-    st.subheader("Leaderboard")
+    st.markdown("<h3 style='text-align: center;'>Leaderboard</h3>", unsafe_allow_html=True)
     df = get_scores()
     df = df.sort_values(by="Score", ascending=False).reset_index(drop=True)
     df.index = df.index + 1  # Start index from 1
     df.index.name = 'Rank'
-    st.dataframe(df, height=500)
+    st.dataframe(df.head(10), height=380, width=400)
 
 with col1:
     # Get or create user
@@ -210,7 +210,7 @@ with col1:
             zip_buffer.seek(0)
             return zip_buffer
 
-        st.markdown("<h3 style='text-align: center;'>Upload and Process Images</h3>", unsafe_allow_html=True)
+        # st.markdown("<h3 style='text-align: center;'>Upload and Process Images</h3>", unsafe_allow_html=True)
         
         col1, col2 = st.columns([2, 1])
 
