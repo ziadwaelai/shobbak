@@ -39,6 +39,9 @@ session = Session()
 # Function to get or create user entry
 def get_or_create_user():
     mac_address = get_mac_address()
+    if mac_address is None:
+        st.error("Could not retrieve MAC address. Please check your network settings.")
+        return None
     score_entry = session.query(Score).filter_by(mac_address=mac_address).first()
     if score_entry:
         return score_entry
